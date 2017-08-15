@@ -1381,6 +1381,7 @@ i2c_rx_blccsum:	in	i_temp1, TWDR		; We can't do anything with the checksum, so j
 	;  0x08  (read-only)   Current high
 	;  0x09  (read-only)   Current low
 	;  0x0A  (read-only)   Identification (0xab)
+	;  0x0F  (write-only)  Set Slave Address
 	; Address gets auto-incremented.
 	; TODO: expose O_GROUND, O_POWER, etc.?
 		in	i_sreg, SREG
@@ -1427,12 +1428,30 @@ i2c_rx_value:	inc	i_temp1
 		breq	i2c_rx_hi
 		cpi	i_temp1, 0x82
 		breq	i2c_rx_lo
+		
+		cpi i_temp1, 0x8F			; Assume 0x0B is to change the Address
+		breq	i2c_rx_addr
+		
 		rjmp	i2c_ack			; Discard
 i2c_rx_hi:	mov	rx_h, i_temp2
 		rjmp	i2c_ack
 i2c_rx_lo:	mov	rx_l, i_temp2
 		sbr	flags1, (1<<EVAL_RC)|(1<<I2C_MODE)	; i2c message received
 		rjmp	i2c_ack
+i2c_rx_addr: ; Write into the EEPROM
+		rcall 	EE_WRITE
+		rjmp	i2c_ack
+
+EE_WRITE:
+		SBIC EECR, EEWE		;CHECK IF EEPROM AVAILABLE
+		RJMP EE_WRITE       ;LOOP-BACK IF NOT AVAILABLE
+		ldi i_temp1, 0
+		OUT EEARL, i_temp1        ;EPROM ADDRESS 0x00 for address
+		ldi i_temp1, 0x28
+	    OUT EEDR, i_temp1       ;EEPROM DATA TO WRITE
+		SBI EECR,EEMWE       ;ENABLE EEPROM
+		SBI EECR,EEWE        ;ENABLE WRITE
+		RET					;RETURN
 
 i2c_tx_init:
 i2c_tx_data:	lds	i_temp1, i2c_rx_state
