@@ -72,6 +72,10 @@ read_dapa:
 read_uisp:
 	uisp -dprog=dapa --download -v of=flash.hex
 
+build_afro_nfet:
+	make clean; \
+	make afro_nfet.hex || exit -1; \
+	
 build_blueesc_addresses:
 	for MOTOR_ID in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do \
 		make clean; \
