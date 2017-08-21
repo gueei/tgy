@@ -1381,7 +1381,7 @@ i2c_rx_blccsum:	in	i_temp1, TWDR		; We can't do anything with the checksum, so j
 	;  0x08  (read-only)   Current high
 	;  0x09  (read-only)   Current low
 	;  0x0A  (read-only)   Identification (0xab)
-	;  0xFA  (read-write)  Device (Slave) Address
+	;  0xCE  (read-write)  Device (Slave) Address
 	; Address gets auto-incremented.
 	; TODO: expose O_GROUND, O_POWER, etc.?
 		in	i_sreg, SREG
@@ -1428,7 +1428,7 @@ i2c_rx_value:	inc	i_temp1
 		breq	i2c_rx_hi
 		cpi	i_temp1, 0x82
 		breq	i2c_rx_lo
-		cpi	i_temp1, 0xFB
+		cpi	i_temp1, 0xCF
 		breq	i2c_rx_addr
 		rjmp	i2c_ack			; Discard
 i2c_rx_hi:	mov	rx_h, i_temp2
@@ -1441,13 +1441,19 @@ i2c_rx_addr: 					; Write received address into the EEPROM
 		SBIC	EECR, EEWE		;CHECK IF EEPROM AVAILABLE
 		RJMP	i2c_rx_addr		;LOOP-BACK IF NOT AVAILABLE
 		ldi	i_temp1, 0
+		cbr	i_temp2, 0xC0		;Limit to valid addresses
+		cpi	i_temp2, 0x03
+		brlo	i2c_rx_addr_check
+	i2c_rx_addr_ret:
+		
 		OUT	EEARL, i_temp1		;EPROM ADDRESS 0x00 for address
-		ldi 	i_temp1, 0x28		;Should replace with i_temp2 
-		OUT 	EEDR, i_temp1		;EEPROM DATA TO WRITE
+		OUT 	EEDR, i_temp2		;EEPROM DATA TO WRITE
 		SBI 	EECR,EEMWE		;ENABLE EEPROM
 		SBI 	EECR,EEWE		;ENABLE WRITE
 		rjmp	i2c_ack
-		
+i2c_rx_addr_check:
+		ldi	i_temp2, 0x03
+		rjmp	i2c_rx_addr_ret
 i2c_tx_init:
 i2c_tx_data:	lds	i_temp1, i2c_rx_state
 		inc	i_temp1
@@ -1465,7 +1471,7 @@ i2c_tx_hi:	cpi	i_temp1, 0x83
 		breq	i2c_tx_temp
 		cpi	i_temp1, 0x89
 		breq	i2c_tx_curr
-		cpi	i_temp1, 0xFB
+		cpi	i_temp1, 0xCF
 		breq	i2c_tx_addr
 		ldi2	i_temp1, i_temp2, 0xabab	; Send the ID
 i2c_tx_do:	out	TWDR, i_temp1
@@ -1485,8 +1491,17 @@ i2c_tx_temp:	lds	i_temp1, adctemp_h
 i2c_tx_curr:	lds	i_temp1, adccurr_h
 		lds	i_temp2, adccurr_l
 		rjmp	i2c_tx_do
-i2c_tx_addr:	ldi	i_temp1, 0x28		; Send the address stored in EEPROM -- after setting
-		ldi	i_temp2, 0x28
+i2c_tx_addr:	
+		SBIC 	EECR,EEWE	;CHECK IF EEPROM BUSY
+		RJMP 	i2c_tx_addr	;ITS BUSY SO WE WAIT
+		ldi	i_temp1, 0x00
+		OUT	EEARH,i_temp1
+		OUT 	EEARL,i_temp1	;SET-UP THE ADDRESS
+		SBI 	EECR,EERE	;SET-UP TO READ
+		IN  	i_temp1,EEDR	;READ THE DATA REGISTER		   
+
+		mov	i_temp2, i_temp1
+		cbr	i_temp2, 0x80
 		rjmp	i2c_tx_do
 	.endif
 	.endif
@@ -2779,9 +2794,26 @@ i2c_init:
 		subi	temp1, -1
 		sbis	PINB, adr2
 		subi	temp1, -2
-		.endif
 		out	TWAR, temp1
 		outi	TWCR, (1<<TWIE)+(1<<TWEN)+(1<<TWEA)+(1<<TWINT), temp1
+		.else
+	
+	i2c_init_read_addr:	
+		SBIC 	EECR,EEWE	;CHECK IF EEPROM BUSY
+		RJMP 	i2c_init_read_addr	;ITS BUSY SO WE WAIT
+		ldi	temp1, 0x00
+		ldi	temp2, 0x00
+		OUT	EEARH, temp2
+		OUT 	EEARL,temp1	;SET-UP THE ADDRESS
+		SBI 	EECR,EERE	;SET-UP TO READ
+		IN  	temp1,EEDR	;READ THE DATA REGISTER	
+		;ldi	temp1, 0x99
+		cbr	temp1, 0xC0	;Clear highest two bit from the address (to avoid issue with 0xFF)
+		lsl	temp1
+		out	TWAR, temp1
+		outi	TWCR, (1<<TWIE)+(1<<TWEN)+(1<<TWEA)+(1<<TWINT), temp1
+		.endif
+		
 		ret
 .endif
 ;-----bko-----------------------------------------------------------------

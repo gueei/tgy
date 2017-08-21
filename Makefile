@@ -76,34 +76,3 @@ build_afro_nfet:
 	make clean; \
 	make afro_nfet.hex || exit -1; \
 	
-build_blueesc_addresses:
-	for MOTOR_ID in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do \
-		make clean; \
-		export MOTOR_ID; \
-		make blueesc.hex || exit -1; \
-		mv blueesc.hex blueesc"_id"$$MOTOR_ID."hex" || exit -1; \
-	done
-
-build_afro_nfet_addresses:
-	for MOTOR_ID in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do \
-		make clean; \
-		export MOTOR_ID; \
-		make afro_nfet.hex || exit -1; \
-		mv afro_nfet.hex afro_nfet"_id"$$MOTOR_ID."hex" || exit -1; \
-	done
-
-build_blueesc_addresses_zip:
-	make build_blueesc_addresses; \
-	TARGET="blueesc_firmware_`date '+%Y-%m-%d'`_`git rev-parse --verify --short HEAD`.zip"; \
-	git archive -9 -o "$$TARGET" HEAD && \
-	zip -9 "$$TARGET" blueesc_id*.hex && ls -l "$$TARGET"
-
-build_afro_nfet_addresses_zip:
-	make build_afro_nfet_addresses; \
-	TARGET="afro_nfet_firmware_`date '+%Y-%m-%d'`_`git rev-parse --verify --short HEAD`.zip"; \
-	git archive -9 -o "$$TARGET" HEAD && \
-	zip -9 "$$TARGET" afro_nfet_id*.hex && ls -l "$$TARGET"
-
-clean_addresses:
-	-rm -f blueesc_id*.hex
-	-rm -f afro_nfet_id*.hex
